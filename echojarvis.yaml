@@ -1,0 +1,234 @@
+esphome:
+  name: echojarvis
+  friendly_name: EchoJarvis
+  on_boot:
+    - light.turn_on:
+        id: ring_light
+        red: 0%
+        green: 0%
+        blue: 100%
+        brightness: 50%
+
+esp32:
+  board: adafruit_feather_esp32_v2 # esp32dev
+  framework:
+    type: esp-idf
+
+# 14:2B:2F:AF:90:F0
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "CatFg+QRSnaQogRp37xKvqdWB639AG79sioKnghPuuc="
+  on_client_connected:
+        then:
+          - delay: 50ms
+          - light.turn_off: ring_light
+          - micro_wake_word.start:
+  on_client_disconnected:
+        then:
+          - voice_assistant.stop: 
+
+ota:
+  - platform: esphome
+    password: "bd92ad68e50529a7b3ae09a63406f824"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.0.201
+    gateway: 192.168.0.1
+    subnet: 255.255.255.0
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Echojarvis Fallback Hotspot"
+    password: "0Ccc0opqKYxK"
+
+captive_portal:
+
+switch:
+  - id: offclick
+    platform: template
+    name: "OffClick"
+    optimistic: true
+    icon: "mdi:button-pointer"
+  - id: onclick
+    platform: template
+    name: "OnClick"
+    optimistic: true
+    icon: "mdi:button-pointer"
+  - id: plusclick
+    platform: template
+    name: "PlusClick"
+    optimistic: true
+    icon: "mdi:button-pointer"
+  - id: minusclick
+    platform: template
+    name: "MinusClick"
+    optimistic: true
+    icon: "mdi:button-pointer"
+
+binary_sensor:
+  - platform: gpio
+    id: offbtn
+    pin:
+      number: GPIO26
+      mode: INPUT_PULLUP
+      inverted: true
+    on_click:
+      min_length: 50ms
+      max_length: 500ms
+      then:
+        - switch.turn_on: offclick
+        - delay: 500ms
+        - switch.turn_off: offclick
+  - platform: gpio
+    id: onbtn
+    pin:
+      number: GPIO25
+      mode: INPUT_PULLUP
+      inverted: true
+    on_click:
+      min_length: 50ms
+      max_length: 500ms
+      then:
+        - switch.turn_on: onclick
+        - delay: 500ms
+        - switch.turn_off: onclick
+  - platform: gpio
+    id: plusbtn
+    pin:
+      number: GPIO19
+      mode: INPUT_PULLUP
+      inverted: true
+    on_click:
+      min_length: 50ms
+      max_length: 500ms
+      then:
+        - switch.turn_on: plusclick
+        - delay: 500ms
+        - switch.turn_off: plusclick
+  - platform: gpio
+    id: minusbtn
+    pin:
+      number: GPIO21
+      mode: INPUT_PULLUP
+      inverted: true
+    on_click:
+      min_length: 50ms
+      max_length: 500ms
+      then:
+        - switch.turn_on: minusclick
+        - delay: 500ms
+        - switch.turn_off: minusclick
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: ring_light
+    chipset: WS2812
+    rgb_order: GRB
+    pin: GPIO5
+    rmt_channel: 0
+    num_leds: 24
+    name: "Ring Light"
+    restore_mode: ALWAYS_OFF
+    effects:
+      - pulse:
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.5s
+          update_interval: 0.5s
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 500ms
+          update_interval: 2s
+      - addressable_scan:
+      - addressable_scan:
+          name: "Scan Wide"
+          move_interval: 20ms
+          scan_width: 6
+
+i2s_audio:
+  - id: i2s_out             # speaker: Adafruit I2S 3W Class D Amplifier Breakout - MAX98357A
+    i2s_lrclk_pin: GPIO12   # LRC
+    i2s_bclk_pin: GPIO14    # BCLK
+  - id: i2s_in              # microphone:
+    i2s_lrclk_pin: GPIO33   # LRCL 
+    i2s_bclk_pin: GPIO15    # BCLK
+
+microphone:
+  - platform: i2s_audio
+    id: va_mic
+    adc_type: external
+    i2s_din_pin: GPIO27     # mic DOUT
+    channel: left
+    pdm: false
+    i2s_audio_id: i2s_in
+    bits_per_sample: 32bit
+    
+speaker:
+    platform: i2s_audio
+    id: va_speaker
+    i2s_audio_id: i2s_out
+    dac_type: external
+    i2s_dout_pin: GPIO32   #  DIN Pin of the MAX98357A Audio Amplifier
+    channel: mono
+
+micro_wake_word:
+  on_wake_word_detected:
+    - voice_assistant.start:
+        wake_word: !lambda return wake_word;
+        silence_detection: true
+    - light.turn_on:
+        id: ring_light
+        effect: "Scan Wide"
+        red: 0%
+        green: 80%
+        blue: 0%
+        brightness: 80%
+  models:
+    - model: hey_jarvis
+
+voice_assistant:
+  id: va
+  microphone: va_mic
+  auto_gain: 31dBFS
+  noise_suppression_level: 2
+  volume_multiplier: 4.0
+  speaker: va_speaker
+  on_stt_end:
+       then: 
+         - light.turn_off: ring_light
+  on_error:
+          - micro_wake_word.start:  
+  on_end:
+        then:
+          - light.turn_off: ring_light
+          - wait_until:
+              not:
+                voice_assistant.is_running:
+          - micro_wake_word.start:
+
+# https://community.home-assistant.io/t/set-volume-for-voice-assistant/688042/5
+number:
+  - platform: template
+    name: "Volume"
+    id: volume
+    unit_of_measurement: "%"
+    min_value: 0.5
+    max_value: 1
+    step: 0.05
+    mode: SLIDER
+    update_interval: never
+    optimistic: true
+    restore_value: true
+    initial_value: 0.8
+    icon: "mdi:knob"
+    #entity_category: config
+    on_value:
+      - speaker.volume_set: !lambda "return x;"
