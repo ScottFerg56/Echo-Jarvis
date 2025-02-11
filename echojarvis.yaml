@@ -22,7 +22,7 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "CatFg+QRSnaQogRp37xKvqdWB639AG79sioKnghPuuc="
+    key: "***"
   on_client_connected:
         then:
           - delay: 50ms
@@ -34,7 +34,7 @@ api:
 
 ota:
   - platform: esphome
-    password: "bd92ad68e50529a7b3ae09a63406f824"
+    password: "***"
 
 wifi:
   ssid: !secret wifi_ssid
@@ -47,7 +47,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Echojarvis Fallback Hotspot"
-    password: "0Ccc0opqKYxK"
+    password: "***"
 
 captive_portal:
 
